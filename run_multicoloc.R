@@ -6,7 +6,7 @@ library(optparse)
 
 
 
-test_run <- T
+test_run <- F
 
 if(test_run == F) {
   
