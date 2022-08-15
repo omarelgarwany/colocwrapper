@@ -42,9 +42,9 @@ if(test_run == F) {
   output_f <- '/nfs/team152/oe2/sqtl/scripts/colocwrapper/example/out.o'
   coloc_type <- 'coloc'
 }
-source('/nfs/team152/oe2/sqtl/scripts/colocwrapper/R/perform_coloc.R')
+source('/nfs/users/nfs_o/oe2/oe2_packages/colocwrapper/R/perform_coloc.R')
 
-source('/nfs/team152/oe2/sqtl/scripts/colocwrapper/R/collect_summstats.R')
+source('/nfs/users/nfs_o/oe2/oe2_packages/colocwrapper/R/collect_summstats.R')
 
 summstats_list <- collect_summstats(config_f,yaml_f)
 
@@ -74,7 +74,7 @@ for(line in 1:summstats_list[['num_lines']]) {
   
 }
 
-print(coloc_res)
-# write.table(coloc_res,file = output_f,quote=F,col.names = F,row.names = F,sep='\t')
+#print(coloc_res)
+write.table(coloc_res,file = output_f,quote=F,col.names = F,row.names = F,sep='\t')
 
 
