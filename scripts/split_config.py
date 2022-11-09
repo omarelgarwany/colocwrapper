@@ -3,8 +3,7 @@ import pandas as pd
 import argparse
 
 parser = argparse.ArgumentParser(description='Split configuration file into chunks')
-parser.add_argument('integers', metavar='N', type=int, nargs='+',
-                    help='an integer for the accumulator')
+
 parser.add_argument('--config-file', dest='conf_f',required=True, help='Configuration file')
 parser.add_argument('--num-chunks', dest='num_chunks',required=True, help='number of chunks')
 parser.add_argument('--chunk-files', dest='chunkoutput_fs',required=True, nargs='+',help='chunk files')
