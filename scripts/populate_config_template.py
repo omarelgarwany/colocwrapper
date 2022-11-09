@@ -21,10 +21,11 @@ with open(config_f) as f:
     f.close()
 
 with open(subs_f) as f:
-    subs_l = f.readline().rstrip().split(',')
-    a = template.format(*subs_l)
-    populated_fields.append(a)
-
+    lines = [line.rstrip().split(',') for line in f]
+    for subs_l in lines:
+        a = template.format(*subs_l)
+        populated_fields.append("{0}{1}".format(a,'\n'))
+# print(populated_fields)
 f = open(output_f, "w")
 f.writelines(populated_fields)
 f.close()
