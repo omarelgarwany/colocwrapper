@@ -9,7 +9,7 @@ def add_chr(dat,col):
     return dat
 
 def remove_chr(dat,col):
-    dat.loc[dat[col].astype(str).str.startswith('chr'),col]=dat.loc[dat[col].astype(str).str.startswith('chr'),col].astype(str).str.slice(3).astype(int)
+    dat.loc[dat[col].astype(str).str.startswith('chr'),col]=dat.loc[dat[col].astype(str).str.startswith('chr'),col].astype(str).str.slice(3)
     return dat
 
 def get_chr_pos_from_snp_name(variants):
@@ -48,12 +48,18 @@ def snp_pos_to_region(snp_pos,padding=500000):
     region=chr+":"+str(start_pos)+"-"+str(end_pos)
     return region
 def region_to_chr_s_e(region):
-    chr,s_e=region.split(':')
-    s,e=s_e.split('-')
-    return chr,int(s),int(e)
-def chr_s_e_to_region(chr,s,e):
-    chr=chr if str(chr).startswith('chr') else 'chr{0}'.format(chr)
-    return '{0}:{1}-{2}'.format(chr,str(s),str(e))
+    out=re.split('[:-]',region)
+    if(len(out)==3):
+        return chr,int(s),int(e)
+    chr,s=out
+    return chr,int(s)
+
+def chr_s_e_to_region(chr,s,e=None):
+    if e != None:
+        chr=chr if str(chr).startswith('chr') else 'chr{0}'.format(chr)
+        return '{0}:{1}-{2}'.format(chr,str(s),str(e))
+    return '{0}:{1}'.format(chr,str(s))
+
 def window_left_boundary(s,p,chrom_size):
     if s-p < 0:
         l=0
@@ -88,7 +94,6 @@ def pad_region(x,chrpos_col,p,chrom_size_dict):
 def save_summstat_chunk(df,f):
     df.to_csv(f,sep='\t',index=False)
 def outside_region(snp_coord,region):
-    print(snp_coord)
     snp_chr,snp_pos=snp_coord.split(':')
     region_chr,region_s,region_e=re.split('[:-]',region)
     snp_pos,region_s,region_e=[int(snp_pos),int(region_s),int(region_e)]
@@ -103,6 +108,7 @@ import pandas as pd
 
 
 thresh=0.00000005
+thresh=0.8
 
 
 #USAGE   screen -DR hyprcoloc.gwas_loci ; bsub -I -R "select[mem>16000] rusage[mem=16000]" -M16000 -J "get_sigloci" -m "modern_hardware"
@@ -127,40 +133,66 @@ pos_col="GENPOS"
 pval_col="PVAL"
 
 chrom_size_dat=pd.read_csv(chrom_size_f,sep='\t',header=None)
+
+
 if(header=='T'):
-    gwas_dat=pd.read_csv(gwas_f,sep='\t')
+    gwas_dat=pd.read_csv(gwas_f,sep='\t',nrows=3)
 else:
-    gwas_dat=pd.read_csv(gwas_f,sep='\t',header=None)
+    gwas_dat=pd.read_csv(gwas_f,sep='\t',header=None,nrows=3)
 
 gwas_dat=add_chr(gwas_dat,chr_col)
+# chrom_size_dat=remove_chr(chrom_size_dat,0)
 
 chrom_size_dict={chr:sz for chr,sz in zip(chrom_size_dat[0].tolist(),chrom_size_dat[1].tolist())}
 gwas_hits=gwas_dat.loc[gwas_dat[pval_col] <= thresh,:].sort_values(by=[pval_col],ascending=True)
 
+#Gene data
+tss_dat=pd.read_csv(gene_lookup_f,sep='\t',header=None)
+tss_regions=[region_to_chr_s_e(i) for i in tss_dat[1].tolist()]
+tss_dat['_chr']=[i[0] for i in tss_regions]
+tss_dat['_s']=[i[1] for i in tss_regions]
 
-
-
+all_hit_genes_dat=pd.DataFrame()
 if gwas_hits.shape[0] > 0:
     final_regions=[]
     lead_snps=[]
     while gwas_hits.shape[0] > 0:
         lowest_pval_snp_chr,lowest_pval_snp_pos=gwas_hits.sort_values(by=[pval_col],ascending=True).iloc[0,:][[chr_col,pos_col]]
         lowest_pval_snp='{0}:{1}'.format(lowest_pval_snp_chr,lowest_pval_snp_pos)
-        print(lowest_pval_snp)
         lt_boundary = window_left_boundary(lowest_pval_snp_pos,p,chrom_size_dict['{0}'.format(lowest_pval_snp_chr)])
         rt_boundary = window_right_boundary(lowest_pval_snp_pos,p,chrom_size_dict['{0}'.format(lowest_pval_snp_chr)])
 
         lowest_pval_region=chr_s_e_to_region(lowest_pval_snp_chr,lt_boundary,rt_boundary)
 
-        gwas_hits['_snp_chrpos']=gwas_hits[chr_col].astype(str)+":"+gwas_hits[pos_col].astype(str)
-        gwas_hits['outside']=gwas_hits.agg(lambda x: outside_region(x['_snp_chrpos'],lowest_pval_region),axis=1)
-        
-        gwas_hits=gwas_hits.loc[gwas_hits['outside']==True,:].drop(['outside'],axis=1)
 
-        final_regions.append(lowest_pval_region)
-        lead_snps.append(lowest_pval_snp)
+
+        gwas_hits['_snp_chrpos']=gwas_hits[chr_col].astype(str)+":"+gwas_hits[pos_col].astype(str)
+        gwas_hits['_outside']=gwas_hits.agg(lambda x: outside_region(x['_snp_chrpos'],lowest_pval_region),axis=1)
+
+        gwas_hits=gwas_hits.loc[gwas_hits['_outside']==True,:].drop(['_outside','_snp_chrpos'],axis=1)
+
+        #Getting gene information
+        hit_genes_dat=tss_dat.loc[(tss_dat['_chr']==lowest_pval_snp_chr) & (tss_dat['_s']>=lt_boundary) & (tss_dat['_s']<=rt_boundary),:]
+        hit_genes_dat['region']=lowest_pval_region
+        hit_genes_dat['lead_snp']=lowest_pval_snp
+        hit_genes_dat=hit_genes_dat.drop(columns=['_s','_chr'])
+        hit_genes_dat=hit_genes_dat.loc[:,['region','lead_snp',0,1]]
+        all_hit_genes_dat=pd.concat([all_hit_genes_dat,hit_genes_dat],ignore_index=True)
+        # final_regions.append(lowest_pval_region)
+        # lead_snps.append(lowest_pval_snp)
         print('Finished locus: {0}..'.format(lowest_pval_region))
 
-print(pd.DataFrame({0:final_regions, 1:lead_snps}))
+loci_dat=all_hit_genes_dat.loc[:,['region','lead_snp']].drop_duplicates()
+
+# loci_dat=pd.DataFrame({0:final_regions, 1:lead_snps})
+# gws_regions=[region_to_chr_s_e(i) for i in loci_dat[0].tolist()]
+# loci_dat['_chr']=[i[0] for i in gws_regions]
+# loci_dat['_s']=[i[1] for i in gws_regions]
+# loci_dat['_e']=[i[2] for i in gws_regions]
+
+
+
+
 print('Outputting to: {0}..'.format(output_f))
-# pd.DataFrame({0:final_regions, 1:lead_snps}).to_csv(output_f,sep='\t',index=False,header=False)
+loci_dat.to_csv(output_f+'.sigloci',sep='\t',index=False,header=False)
+all_hit_genes_dat.to_csv(output_f+'.siglocigenes',sep='\t',index=False,header=False)
