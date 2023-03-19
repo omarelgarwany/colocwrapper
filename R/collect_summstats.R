@@ -34,7 +34,11 @@ get_all_regions <- function(config_dat){
   return(config_dat[['V1']])
 }
 
-collect_summstats <- function(config_f,yaml_f,tabix_binary='/software/team152/oe2/bin/tabix') {
+
+collect_summstats <- function(config_f,yaml_f,sample_size_f,tabix_binary='/software/team152/oe2/bin/tabix') {
+  sample_size_dat <- read.csv(sample_size_f,sep='\t',header=F)
+  
+  
   config_dat <- read.csv(config_f,sep='\t',header=F,stringsAsFactors = F)
   num_traits <- determine_num_traits(config_dat)
   
@@ -52,7 +56,6 @@ collect_summstats <- function(config_f,yaml_f,tabix_binary='/software/team152/oe
   
   
   collected_summstat_list <- list()
-  print(nrow(cmds))
   collected_summstat_list[['num_lines']] <- nrow(cmds)
   
   
@@ -72,66 +75,91 @@ collect_summstats <- function(config_f,yaml_f,tabix_binary='/software/team152/oe
       suffix <- suffixes[[j]]
       tr_type <- tr_types[[suffix]]
       
-      tr_cmd <- cmds[i,paste0('V',j)]
+      # tr_cmd <- cmds[i,paste0('V',j)]
+      
       
       tr_ph <- config_dat[i,paste0('V',2*j)]
-      tr_ph_list[suffix] <- tr_ph
+      tr_f <- config_dat[i,paste0('V',(2*j)+1)]
       
-      tr_dat_txt <- system(tr_cmd,intern=T)
+      tr_cmd <- paste(tabix_binary, tr_f, region)
+      
       print(paste0('Running ', tr_cmd, '...') )
+      tr_dat_txt <- system(tr_cmd,intern=T)
       
+      #If looking up by the given region fails try adding or omitting "chr". it's annoying how different summstats files chromosomes are coded differently
+      if(length(tr_dat_txt) == 0) {
+        attempt_chr_region <- ifelse(grepl("^chr", region ), str_sub(region,4), paste0("chr", region))
+        tr_cmd <- paste(tabix_binary, tr_f, attempt_chr_region)
+        tr_dat_txt <- system(tr_cmd,intern=T)
+      }
       
-      
-      
-      
+      #Applying some checks
       if (length(tr_dat_txt) == 0) {
         print(paste0('SKIPPED: no trait data read for ',tr_ph,'...') )
         skip_region <- T
         break
       }
       
-      
-      
+      #Creating data frame from read text and checking if any column names specific
       tr_dat <- read.table(text=tr_dat_txt,sep='\t',header=F,stringsAsFactors = F)
-      current_tr_id_cols <- paste0('V',tr_id_cols[[suffix]])
-      tr_dat <- tr_dat %>% unite('ph',all_of(current_tr_id_cols),remove=F,sep='|')
-      print(tr_ph)
-      tr_dat <- tr_dat %>% filter( ph %in% all_of(tr_ph) )
-
+      
+      #Applying some checks
       if(dim(tr_dat)[1] == 0) {
         print(paste0('SKIPPED: no data read  or satisfying criteria for ',tr_ph,'...'))
         skip_region <- T
         break
       }
       
-      
-      #Extracting column names. We add N/MAF if it's a quantitative trait
-      snp_chr_col <- paste0('V',tr_val_cols[[suffix]][[1]])
-      snp_pos_col <- paste0('V',tr_val_cols[[suffix]][[2]])
-      beta_col <- paste0('V',tr_val_cols[[suffix]][[3]])
-      se_col <- paste0('V',tr_val_cols[[suffix]][[4]])
-      pval_col <- paste0('V',tr_val_cols[[suffix]][[5]])
-      
-      if(tr_type=='quant') {
-        N_col <- paste0('V',tr_val_cols[[suffix]][[6]])
-        
-
-        
-        maf_col <- paste0('V',tr_val_cols[[suffix]][[7]])
+      #This check indicates that even  after attempting numeric conversion it failed (definitely characters)
+      any_non_numeric_cols <-  (as.numeric(tr_val_cols[[suffix]]) %>% suppressWarnings() %>% is.na() %>% any())
+      if (any_non_numeric_cols) {
+        tr_f_header <- read.csv(tr_f,sep='\t',header=F,nrows=1) %>% as.character()
+        new_col_names <- setNames(names(tr_dat),tr_f_header)
+        tr_dat <- tr_dat %>% dplyr::rename(all_of(new_col_names))
       }
       
-      #Building summstats dataframe depending on type
-      if (tr_type=='quant') {
-        N <- ifelse( startsWith(N_col,'N:') , as.integer( str_split(N_col,':')[[1]][2] ), tr_dat[[N_col]])
+      #Extracting column names. We add N/MAF if it's a quantitative trait. We also check if any provided column name is non-numeric. if any column name is non-numeric we load the header
+      snp_chr_col <- ifelse(tr_val_cols[[suffix]][[1]] %>% as.numeric() %>% suppressWarnings() %>% is.na(),  tr_val_cols[[suffix]][[1]], as.numeric(tr_val_cols[[suffix]][[1]]))
+      snp_pos_col <- ifelse(tr_val_cols[[suffix]][[2]] %>% as.numeric() %>% suppressWarnings() %>% is.na(),  tr_val_cols[[suffix]][[2]],as.numeric(tr_val_cols[[suffix]][[2]]))
+      beta_col <- ifelse(tr_val_cols[[suffix]][[3]] %>% as.numeric() %>% suppressWarnings() %>% is.na(),  tr_val_cols[[suffix]][[3]],as.numeric(tr_val_cols[[suffix]][[3]]))
+      se_col <- ifelse(tr_val_cols[[suffix]][[4]] %>% as.numeric() %>% suppressWarnings() %>% is.na(),  tr_val_cols[[suffix]][[4]],as.numeric(tr_val_cols[[suffix]][[4]]))
+      pval_col <- ifelse(tr_val_cols[[suffix]][[5]] %>% as.numeric() %>% suppressWarnings() %>% is.na(),  tr_val_cols[[suffix]][[5]],as.numeric(tr_val_cols[[suffix]][[5]]))
+      if(tr_type=='quant') {
+        maf_col <- ifelse(tr_val_cols[[suffix]][[6]] %>% as.numeric() %>% suppressWarnings() %>% is.na(),  tr_val_cols[[suffix]][[6]],as.numeric(tr_val_cols[[suffix]][[6]]))
+      }
+      
+      
+      #Correcting chromosome names in snp name
+      tr_dat[[snp_chr_col]] <- ifelse(grepl("^chr", as.character(tr_dat[[snp_chr_col]]) ), as.character(tr_dat[[snp_chr_col]]), paste0("chr", as.character(tr_dat[[snp_chr_col]]) ))
+ 
+      
+      
+      #If it's a quant trait, then sometimes tabix a certain region might give you more than one phenotype
+      if(tr_type=='quant') {
+        tr_dat <- tr_dat %>% unite('ph',all_of(tr_id_cols[[suffix]]),remove=F,sep='|')
+        tr_dat <- tr_dat %>% filter( ph %in% all_of(tr_ph) )
+        
+        N <- first(sample_size_dat[sample_size_dat['V1']==tr_f,'V2'])
         maf=tr_dat[[maf_col]]
       } else {
+        #We don't care if it's not quant trait...
         N=-1
         maf=-1
       }
       
+      
+
+
+
+      
+      
+
+      
+
+      
       tr_summstat <- data.frame(snp=paste0(tr_dat[[snp_chr_col]],':',tr_dat[[snp_pos_col]]),beta=tr_dat[[beta_col]],se=tr_dat[[se_col]],pval=tr_dat[[pval_col]],N=N,maf=maf)
       colnames(tr_summstat) <- c(c('snp'),paste(c('beta','se','pval','N','maf'),j,sep='_'))
-      # print(tr_summstat %>% head(20))
+
       #Merged summstats
       if (j > 1) {
         all_summstat <- tr_summstat %>% inner_join(all_summstat,by='snp')
@@ -140,6 +168,8 @@ collect_summstats <- function(config_f,yaml_f,tabix_binary='/software/team152/oe
         all_summstat <- tr_summstat
       }
       
+      #Keeping track of phenotypes names
+      tr_ph_list[suffix] <- tr_ph
     }
     ###############################
     #END OF INNER LOOP OVER TRAITS#
