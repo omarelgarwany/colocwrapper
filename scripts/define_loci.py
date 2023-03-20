@@ -108,7 +108,7 @@ import pandas as pd
 
 
 thresh=0.00000005
-thresh=0.8
+# thresh=0.8
 
 
 #USAGE   screen -DR hyprcoloc.gwas_loci ; bsub -I -R "select[mem>16000] rusage[mem=16000]" -M16000 -J "get_sigloci" -m "modern_hardware"
@@ -136,12 +136,11 @@ chrom_size_dat=pd.read_csv(chrom_size_f,sep='\t',header=None)
 
 
 if(header=='T'):
-    gwas_dat=pd.read_csv(gwas_f,sep='\t',nrows=3)
+    gwas_dat=pd.read_csv(gwas_f,sep='\t')
 else:
-    gwas_dat=pd.read_csv(gwas_f,sep='\t',header=None,nrows=3)
+    gwas_dat=pd.read_csv(gwas_f,sep='\t',header=None)
 
 gwas_dat=add_chr(gwas_dat,chr_col)
-# chrom_size_dat=remove_chr(chrom_size_dat,0)
 
 chrom_size_dict={chr:sz for chr,sz in zip(chrom_size_dat[0].tolist(),chrom_size_dat[1].tolist())}
 gwas_hits=gwas_dat.loc[gwas_dat[pval_col] <= thresh,:].sort_values(by=[pval_col],ascending=True)
@@ -158,41 +157,45 @@ if gwas_hits.shape[0] > 0:
     lead_snps=[]
     while gwas_hits.shape[0] > 0:
         lowest_pval_snp_chr,lowest_pval_snp_pos=gwas_hits.sort_values(by=[pval_col],ascending=True).iloc[0,:][[chr_col,pos_col]]
+
         lowest_pval_snp='{0}:{1}'.format(lowest_pval_snp_chr,lowest_pval_snp_pos)
         lt_boundary = window_left_boundary(lowest_pval_snp_pos,p,chrom_size_dict['{0}'.format(lowest_pval_snp_chr)])
         rt_boundary = window_right_boundary(lowest_pval_snp_pos,p,chrom_size_dict['{0}'.format(lowest_pval_snp_chr)])
 
         lowest_pval_region=chr_s_e_to_region(lowest_pval_snp_chr,lt_boundary,rt_boundary)
 
-
-
+        #Keeping only hits that are inside the region
         gwas_hits['_snp_chrpos']=gwas_hits[chr_col].astype(str)+":"+gwas_hits[pos_col].astype(str)
         gwas_hits['_outside']=gwas_hits.agg(lambda x: outside_region(x['_snp_chrpos'],lowest_pval_region),axis=1)
-
         gwas_hits=gwas_hits.loc[gwas_hits['_outside']==True,:].drop(['_outside','_snp_chrpos'],axis=1)
 
         #Getting gene information
         hit_genes_dat=tss_dat.loc[(tss_dat['_chr']==lowest_pval_snp_chr) & (tss_dat['_s']>=lt_boundary) & (tss_dat['_s']<=rt_boundary),:]
-        hit_genes_dat['region']=lowest_pval_region
-        hit_genes_dat['lead_snp']=lowest_pval_snp
+        hit_genes_dat['leadsnp_region']=lowest_pval_region
+        hit_genes_dat['leadsnp']=lowest_pval_snp
+
+
+
+
+        tss_lt_boundaries = [window_left_boundary(tss_pos,p,chrom_size_dict['{0}'.format(tss_chrom)]) for tss_chrom,tss_pos in zip(hit_genes_dat['_chr'],hit_genes_dat['_s'])]
+        tss_rt_boundaries = [window_right_boundary(tss_pos,p,chrom_size_dict['{0}'.format(tss_chrom)]) for tss_chrom,tss_pos in zip(hit_genes_dat['_chr'],hit_genes_dat['_s'])]
+
+        tss_regions=['{0}:{1}-{2}'.format(lowest_pval_snp_chr,tss_lt_boundary,tss_rt_boundry) for tss_lt_boundary,tss_rt_boundry in zip(tss_lt_boundaries,tss_rt_boundaries) ]
+        hit_genes_dat['tss_region']=tss_regions
+
         hit_genes_dat=hit_genes_dat.drop(columns=['_s','_chr'])
-        hit_genes_dat=hit_genes_dat.loc[:,['region','lead_snp',0,1]]
+
+        hit_genes_dat=hit_genes_dat.loc[:,['leadsnp_region','leadsnp',0,1,'tss_region']].rename(columns={0:'gene_id',1:'gene_tss'})
         all_hit_genes_dat=pd.concat([all_hit_genes_dat,hit_genes_dat],ignore_index=True)
-        # final_regions.append(lowest_pval_region)
-        # lead_snps.append(lowest_pval_snp)
+
         print('Finished locus: {0}..'.format(lowest_pval_region))
 
-loci_dat=all_hit_genes_dat.loc[:,['region','lead_snp']].drop_duplicates()
-
-# loci_dat=pd.DataFrame({0:final_regions, 1:lead_snps})
-# gws_regions=[region_to_chr_s_e(i) for i in loci_dat[0].tolist()]
-# loci_dat['_chr']=[i[0] for i in gws_regions]
-# loci_dat['_s']=[i[1] for i in gws_regions]
-# loci_dat['_e']=[i[2] for i in gws_regions]
+loci_dat=all_hit_genes_dat.loc[:,['leadsnp_region','leadsnp']].drop_duplicates()
 
 
 
-
+print('Found {0} loci and {1} genes'.format(loci_dat.shape[0],all_hit_genes_dat.shape[0]))
 print('Outputting to: {0}..'.format(output_f))
-loci_dat.to_csv(output_f+'.sigloci',sep='\t',index=False,header=False)
-all_hit_genes_dat.to_csv(output_f+'.siglocigenes',sep='\t',index=False,header=False)
+
+loci_dat.to_csv(output_f+'.sigloci',sep='\t',index=False)
+all_hit_genes_dat.to_csv(output_f+'.siglocigenes',sep='\t',index=False)
