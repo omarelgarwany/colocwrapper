@@ -88,6 +88,7 @@ collect_summstats <- function(config_f,yaml_f,sample_size_f,tabix_binary='/softw
       
       #If looking up by the given region fails try adding or omitting "chr". it's annoying how different summstats files chromosomes are coded differently
       if(length(tr_dat_txt) == 0) {
+        
         attempt_chr_region <- ifelse(grepl("^chr", region ), str_sub(region,4), paste0("chr", region))
         tr_cmd <- paste(tabix_binary, tr_f, attempt_chr_region)
         tr_dat_txt <- system(tr_cmd,intern=T)
@@ -113,9 +114,11 @@ collect_summstats <- function(config_f,yaml_f,sample_size_f,tabix_binary='/softw
       #This check indicates that even  after attempting numeric conversion it failed (definitely characters)
       any_non_numeric_cols <-  (as.numeric(tr_val_cols[[suffix]]) %>% suppressWarnings() %>% is.na() %>% any())
       if (any_non_numeric_cols) {
-        tr_f_header <- read.csv(tr_f,sep='\t',header=F,nrows=1) %>% as.character()
+        tr_f_header <- read.csv(tr_f,sep='\t',nrows=1) %>% as.character()
+        print(tr_f_header)
         new_col_names <- setNames(names(tr_dat),tr_f_header)
         tr_dat <- tr_dat %>% dplyr::rename(all_of(new_col_names))
+
       }
       
       #Extracting column names. We add N/MAF if it's a quantitative trait. We also check if any provided column name is non-numeric. if any column name is non-numeric we load the header
