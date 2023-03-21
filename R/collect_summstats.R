@@ -98,24 +98,20 @@ collect_summstats <- function(config_f,yaml_f,sample_size_f,tabix_binary='/softw
       if (length(tr_dat_txt) == 0) {
         print(paste0('SKIPPED: no trait data read for ',tr_ph,'...') )
         skip_region <- T
+        collected_summstat_list[[line_idx]][['skipped']] <- skip_region
         break
       }
       
       #Creating data frame from read text and checking if any column names specific
       tr_dat <- read.table(text=tr_dat_txt,sep='\t',header=F,stringsAsFactors = F)
       
-      #Applying some checks
-      if(dim(tr_dat)[1] == 0) {
-        print(paste0('SKIPPED: no data read  or satisfying criteria for ',tr_ph,'...'))
-        skip_region <- T
-        break
-      }
+
       
       #This check indicates that even  after attempting numeric conversion it failed (definitely characters)
       any_non_numeric_cols <-  (as.numeric(tr_val_cols[[suffix]]) %>% suppressWarnings() %>% is.na() %>% any())
       if (any_non_numeric_cols) {
-        tr_f_header <- read.csv(tr_f,sep='\t',nrows=1) %>% as.character()
-        print(tr_f_header)
+        tr_f_header <- read.csv(tr_f,sep='\t',nrows=1,header=F,stringsAsFactors = F) 
+        
         new_col_names <- setNames(names(tr_dat),tr_f_header)
         tr_dat <- tr_dat %>% dplyr::rename(all_of(new_col_names))
 
@@ -156,7 +152,13 @@ collect_summstats <- function(config_f,yaml_f,sample_size_f,tabix_binary='/softw
 
       
       
-
+      #Applying some checks
+      if(dim(tr_dat)[1] == 0) {
+        print(paste0('SKIPPED: no data read  or satisfying criteria for ',tr_ph,'...'))
+        skip_region <- T
+        collected_summstat_list[[line_idx]][['skipped']] <- skip_region
+        break
+      }
       
 
       
@@ -179,14 +181,18 @@ collect_summstats <- function(config_f,yaml_f,sample_size_f,tabix_binary='/softw
     ###############################
     if(skip_region) {
       print(paste0('Region couldnt be processed for command: ',tr_cmd))
-      collected_summstat_list[[i]] <- NA
+      # collected_summstat_list[[i]] <- NA
+      skip_region <- T
+      collected_summstat_list[[line_idx]][['skipped']] <- skip_region
       next
     }
     print(paste0("Joined summstats: ",dim(all_summstat)[1]) )
     
     if(dim(all_summstat)[1] == 0) {
       print('SKIPPED: no joint summstats data...')
-      collected_summstat_list[[i]] <- NA
+      # collected_summstat_list[[i]] <- NA
+      skip_region <- T
+      collected_summstat_list[[line_idx]][['skipped']] <- skip_region
       next
     }
     
@@ -204,6 +210,8 @@ collect_summstats <- function(config_f,yaml_f,sample_size_f,tabix_binary='/softw
     all_summstat <- all_summstat %>% filter(if_all(all_of(se_cols), ~ . > 0)) %>% filter(if_all(all_of(se_cols), ~ . != Inf))  %>% filter(if_all(all_of(beta_cols), ~ . != Inf))
     if(dim(all_summstat)[1] < 2) {
       print('SKIPPED: filtering join summstats resulted in data with less than 2 SNPs...')
+      skip_region <- T
+      collected_summstat_list[[line_idx]][['skipped']] <- skip_region
       next
     }
     
@@ -220,7 +228,7 @@ collect_summstats <- function(config_f,yaml_f,sample_size_f,tabix_binary='/softw
     N_dat <- all_summstat[N_cols] %>% dplyr::rename(setNames(N_cols,new_cols))
     maf_dat <- all_summstat[maf_cols] %>% dplyr::rename(setNames(maf_cols,new_cols))
     #
-    
+    collected_summstat_list[[line_idx]][['skipped']] <- skip_region
     collected_summstat_list[[line_idx]][['beta']] <- beta_dat
     collected_summstat_list[[line_idx]][['se']] <- se_dat
     collected_summstat_list[[line_idx]][['pval']] <- pval_dat
