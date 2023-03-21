@@ -1,6 +1,4 @@
 import pandas as pd
-import subprocess as sp
-import io
 import sys
 import re
 import pandas as pd
