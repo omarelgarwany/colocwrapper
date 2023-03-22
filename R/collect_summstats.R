@@ -123,9 +123,8 @@ collect_summstats <- function(config_f,yaml_f,sample_size_f,tabix_binary='/softw
       beta_col <- ifelse(tr_val_cols[[suffix]][[3]] %>% as.numeric() %>% suppressWarnings() %>% is.na(),  tr_val_cols[[suffix]][[3]],as.numeric(tr_val_cols[[suffix]][[3]]))
       se_col <- ifelse(tr_val_cols[[suffix]][[4]] %>% as.numeric() %>% suppressWarnings() %>% is.na(),  tr_val_cols[[suffix]][[4]],as.numeric(tr_val_cols[[suffix]][[4]]))
       pval_col <- ifelse(tr_val_cols[[suffix]][[5]] %>% as.numeric() %>% suppressWarnings() %>% is.na(),  tr_val_cols[[suffix]][[5]],as.numeric(tr_val_cols[[suffix]][[5]]))
-      if(tr_type=='quant') {
-        maf_col <- ifelse(tr_val_cols[[suffix]][[6]] %>% as.numeric() %>% suppressWarnings() %>% is.na(),  tr_val_cols[[suffix]][[6]],as.numeric(tr_val_cols[[suffix]][[6]]))
-      }
+
+
       
       
       #Correcting chromosome names in snp name
@@ -137,17 +136,40 @@ collect_summstats <- function(config_f,yaml_f,sample_size_f,tabix_binary='/softw
       if(tr_type=='quant') {
         tr_dat <- tr_dat %>% unite('ph',all_of(tr_id_cols[[suffix]]),remove=F,sep='|')
         tr_dat <- tr_dat %>% filter( ph %in% all_of(tr_ph) )
-        
-        N <- first(sample_size_dat[sample_size_dat['V1']==tr_f,'V2'])
-        maf=tr_dat[[maf_col]]
-      } else {
-        #We don't care if it's not quant trait...
-        N=-1
-        maf=-1
       }
       
+      #MAF columns
+      if(tr_type=='quant') { 
+        maf_col <- ifelse(tr_val_cols[[suffix]][[6]] %>% as.numeric() %>% suppressWarnings() %>% is.na(),  tr_val_cols[[suffix]][[6]],as.numeric(tr_val_cols[[suffix]][[6]]))
+        maf=tr_dat[[maf_col]] 
+      } else { 
+          maf <- -1 
+      }
       
+      #N column. if user provided a column name use it if not look for sample size file
+      if(length(tr_val_cols[[suffix]])==7) {
+        N_col <- ifelse(tr_val_cols[[suffix]][[7]] %>% as.numeric() %>% suppressWarnings() %>% is.na(),  tr_val_cols[[suffix]][[7]],as.numeric(tr_val_cols[[suffix]][[7]]))
+        N <- first(as.numeric(tr_dat[[N_col]]))
+      } else {
+        if(tr_type=='quant') {
+          N_info <- sample_size_dat[sample_size_dat['V1']==tr_f,]
 
+          if(dim(N_info)[[1]] == 0) {
+            print(paste0('SKIPPED: no sample size information matching file: ',tr_f,'...'))
+            skip_region <- T
+            collected_summstat_list[[line_idx]][['skipped']] <- skip_region
+            break 
+          }
+          N <- first(N_info[['V2']])
+          
+        } else {
+          #We don't care if it's not quant trait...
+          N=-1
+        }        
+      }
+
+      
+      
 
 
       
@@ -201,11 +223,12 @@ collect_summstats <- function(config_f,yaml_f,sample_size_f,tabix_binary='/softw
     pval_cols <- all_summstat[paste('pval',1:num_traits,sep='_')] %>% names()
     N_cols <- all_summstat[paste('N',1:num_traits,sep='_')] %>% names()
     maf_cols <- all_summstat[paste('maf',1:num_traits,sep='_')] %>% names()
-    
     #Removing all duplicated entries
     all_summstat <- all_summstat %>% filter(! (snp %in% all_summstat$snp[all_summstat$snp %>% duplicated()]))
     #Removing NA's
     all_summstat <- all_summstat %>% drop_na()
+
+    
     #Removing SE=0
     all_summstat <- all_summstat %>% filter(if_all(all_of(se_cols), ~ . > 0)) %>% filter(if_all(all_of(se_cols), ~ . != Inf))  %>% filter(if_all(all_of(beta_cols), ~ . != Inf))
     if(dim(all_summstat)[1] < 2) {
@@ -227,6 +250,8 @@ collect_summstats <- function(config_f,yaml_f,sample_size_f,tabix_binary='/softw
     pval_dat <- all_summstat[pval_cols] %>% dplyr::rename(setNames(pval_cols,new_cols))
     N_dat <- all_summstat[N_cols] %>% dplyr::rename(setNames(N_cols,new_cols))
     maf_dat <- all_summstat[maf_cols] %>% dplyr::rename(setNames(maf_cols,new_cols))
+    
+    
     #
     collected_summstat_list[[line_idx]][['skipped']] <- skip_region
     collected_summstat_list[[line_idx]][['beta']] <- beta_dat
