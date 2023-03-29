@@ -34,15 +34,20 @@ get_all_regions <- function(config_dat){
   return(config_dat[['V1']])
 }
 
+read_config_dat <- function(config_f) {
+  config_dat <- read.csv(config_f,sep='\t',header=F,stringsAsFactors = F)
+  return(config_dat)
+}
+read_yaml_dat <- function(yaml_f) {
+  return(config::get(file=yaml_f))
+}
 
-collect_summstats <- function(config_f,yaml_f,sample_size_f,tabix_binary='/software/team152/oe2/bin/tabix') {
+collect_summstats <- function(config_dat,yaml_dat,sample_size_f,tabix_binary='/software/team152/oe2/bin/tabix') {
   sample_size_dat <- read.csv(sample_size_f,sep='\t',header=F)
   
   
-  config_dat <- read.csv(config_f,sep='\t',header=F,stringsAsFactors = F)
   num_traits <- determine_num_traits(config_dat)
   
-  yaml_dat <- config::get(file=yaml_f)
   yaml_meta <- process_yaml(yaml_dat,num_traits)
   suffixes <- yaml_meta[['suffixes']]
   tr_val_cols <- yaml_meta[['tr_val_cols']]
