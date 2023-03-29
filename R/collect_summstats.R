@@ -42,8 +42,7 @@ read_yaml_dat <- function(yaml_f) {
   return(config::get(file=yaml_f))
 }
 
-collect_summstats <- function(config_dat,yaml_dat,sample_size_f,tabix_binary='/software/team152/oe2/bin/tabix') {
-  sample_size_dat <- read.csv(sample_size_f,sep='\t',header=F)
+collect_summstats <- function(config_dat,yaml_dat,sample_size_f='',tabix_binary='/software/team152/oe2/bin/tabix') {
   
   
   num_traits <- determine_num_traits(config_dat)
@@ -153,10 +152,12 @@ collect_summstats <- function(config_dat,yaml_dat,sample_size_f,tabix_binary='/s
       
       #N column. if user provided a column name use it if not look for sample size file
       if(length(tr_val_cols[[suffix]])==7) {
+        
         N_col <- ifelse(tr_val_cols[[suffix]][[7]] %>% as.numeric() %>% suppressWarnings() %>% is.na(),  tr_val_cols[[suffix]][[7]],as.numeric(tr_val_cols[[suffix]][[7]]))
         N <- first(as.numeric(tr_dat[[N_col]]))
       } else {
         if(tr_type=='quant') {
+          sample_size_dat <- read.csv(sample_size_f,sep='\t',header=F)
           N_info <- sample_size_dat[sample_size_dat['V1']==tr_f,]
 
           if(dim(N_info)[[1]] == 0) {
