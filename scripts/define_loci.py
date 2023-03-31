@@ -74,8 +74,8 @@ def outside_region(snp_coord,region):
 
 gwas_f=sys.argv[1]
 gene_lookup_f=sys.argv[2]
-padding=int(sys.argv[3])
-chrom_size_f=sys.argv[4]
+chrom_size_f=sys.argv[3]
+window=int(sys.argv[4])
 header=sys.argv[5]
 output_f=sys.argv[6]
 
@@ -86,7 +86,7 @@ pos_col="GENPOS"
 pval_col="PVAL"
 
 
-p = padding/2
+p = window/2
 
 
 #Reading/formatting GWAS data
