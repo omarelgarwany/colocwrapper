@@ -39,7 +39,8 @@ read_config_dat <- function(config_f) {
   return(config_dat)
 }
 read_yaml_dat <- function(yaml_f) {
-  return(config::get(file=yaml_f))
+  yaml_dat <- config::get(file=yaml_f, use_parent = FALSE)
+  return(yaml_dat)
 }
 
 collect_summstats <- function(config_dat,yaml_dat,sample_size_f='',tabix_binary='/software/team152/oe2/bin/tabix') {
@@ -189,7 +190,7 @@ collect_summstats <- function(config_dat,yaml_dat,sample_size_f='',tabix_binary=
       }
       
 
-      
+
       tr_summstat <- data.frame(snp=paste0(tr_dat[[snp_chr_col]],':',tr_dat[[snp_pos_col]]),beta=tr_dat[[beta_col]],se=tr_dat[[se_col]],pval=tr_dat[[pval_col]],N=N,maf=maf)
       colnames(tr_summstat) <- c(c('snp'),paste(c('beta','se','pval','N','maf'),j,sep='_'))
 
