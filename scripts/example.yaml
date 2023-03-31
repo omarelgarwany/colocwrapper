@@ -1,0 +1,9 @@
+default:
+  tr_id_cols:
+  - finngenk60v1
+  - [4]
+  tr_val_cols:
+  - [CHROM, GENPOS, BETA, SE, PVAL]
+  - [chromosome, position, beta, se, pvalue, maf]
+  type: [cc, quant]
+
