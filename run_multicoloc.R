@@ -53,7 +53,7 @@ print(paste0('YAML file: ',yaml_f))
 print(paste0('Sample size file: ',sample_size_f))
 print(paste0('Output file: ',output_f))
 print('===================')
-config_dat <- read_config_dat(config_g)
+config_dat <- read_config_dat(config_f)
 yaml_dat <- read_yaml_dat(yaml_f)
 summstats_list <- collect_summstats(config_dat,yaml_dat,sample_size_f)
 
