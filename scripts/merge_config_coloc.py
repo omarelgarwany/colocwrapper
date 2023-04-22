@@ -29,7 +29,6 @@ for coloc_f,config_f in zip(coloc_fs,config_fs):
             coloc_dat=pd.read_csv(coloc_f,sep='\t',header=None)
 
             merged_dat=coloc_dat.merge(config_dat,left_on=[9],right_on=['_line_idx'],how='left')
-
             all_merged_dat=pd.concat([all_merged_dat,merged_dat],ignore_index=True).drop(columns=['_line_idx'])
 
 all_merged_dat.to_csv(output_f,sep='\t',header=False,index=False)
