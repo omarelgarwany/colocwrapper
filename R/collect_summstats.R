@@ -155,7 +155,7 @@ collect_summstats <- function(config_dat,yaml_dat,sample_size_f='',tabix_binary=
       if(length(tr_val_cols[[suffix]])==7) {
         
         N_col <- ifelse(tr_val_cols[[suffix]][[7]] %>% as.numeric() %>% suppressWarnings() %>% is.na(),  tr_val_cols[[suffix]][[7]],as.numeric(tr_val_cols[[suffix]][[7]]))
-        N <- first(as.numeric(tr_dat[[N_col]]))
+        N <- as.numeric(tr_dat[1,N_col])
       } else {
         if(tr_type=='quant') {
           sample_size_dat <- read.csv(sample_size_f,sep='\t',header=F)
@@ -167,7 +167,9 @@ collect_summstats <- function(config_dat,yaml_dat,sample_size_f='',tabix_binary=
             collected_summstat_list[[line_idx]][['skipped']] <- skip_region
             break 
           }
-          N <- first(N_info[['V2']])
+          
+          N <- N_info[1,'V2']
+          
           
         } else {
           #We don't care if it's not quant trait...
